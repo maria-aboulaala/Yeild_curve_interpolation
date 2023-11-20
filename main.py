@@ -4,9 +4,11 @@ from bs4 import BeautifulSoup
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.interpolate import CubicSpline
+from scipy.interpolate import interp1d, CubicSpline
 from scipy.optimize import least_squares
 import statsmodels.api as sm
+
+
 
 st.title('Modélisation de la courbe du taux:')
 
@@ -14,7 +16,7 @@ st.title('Modélisation de la courbe du taux:')
 # st.subheader('Entrez les parametres de votre portefeuille: :key: ')
 with st.form(key="my_form"):
     country = st.text_input("Choisir le pays")
-    modele = st.selectbox("Le modele", ["spline cubic", "CIR", "Nelson Siegel", "Vasicek "])
+    modele = st.selectbox("Le modele", ["spline cubic", "Nelson Siegel", "Vasicek ", "Linear", "polynomial"])
     st.form_submit_button("Modeliser")
 
 
@@ -184,22 +186,7 @@ elif modele == "Nelson Siegel" :
 
             """)
 
-
-    # beta_sm = [1, 1, 1]
-    # level_factor_sm =  np.ones(df.index.size)
-    # slope_factor_sm = (1 - np.exp((-1)*lamda*df.index))/(lamda*df.index)
-    # curvature_factor_sm = (1 - np.exp((-1)*lamda*df.index))/(lamda*df.index) - np.exp((-1)*lamda*df.index)
-    # X = np.column_stack((level_factor_sm, slope_factor_sm, curvature_factor_sm))
-    # df['taux']
-
-    # model = sm.OLS(df['taux'], X)
-    # results = model.fit()
-    # st.write('beta values: ', results.params)
-    # st.write()
-    # st.write(results.summary())
-
     np.round(NS_yield(df.index, optimum_beta), 3)
-
     plt.figure()
     plt.title('courbe de taux NelsonSiegel', fontsize = 15)
     plt.xlabel('maturité (en mois)')
@@ -213,14 +200,89 @@ elif modele == "Nelson Siegel" :
 
 # ---------------------------------- ikhan d Vasicek---------------------
 elif modele == "Vasicek":
-    st.write('grrr')
+
+    def model_vasicek(known_time, known_rates, params=None):
+        if params is None:
+            params = fit_vasicek_parameters(known_time, known_rates)
+        random_noise = np.random.normal(0, 1, len(known_time))
+        ytm = params[0] + params[1] * (params[0] - known_time) * (1 - np.exp(-params[2] * known_time)) / params[2] + params[2] / params[1] * (
+                    (1 - np.exp(-params[2] * known_time)) * random_noise - known_time * (1 - np.exp(-params[2] * known_time)))
+        return ytm
+
+        def fit_vasicek_parameters(self, known_time, known_rates):
+        # Objective function to minimize (sum of squared errors)
+            def objective_function(params, known_time, known_rates):
+                return np.sum((known_rates - self.model_vasicek(known_time, *params))**2)
+
+        # Initial guess for parameters and constraints
+        initial_params = [0.01, 0.01, 0.01]
+        constraints = ({'type': 'positive', 'fun': lambda x: x[2]})
+        
+        # Minimize the objective function using scipy.optimize.minimize
+        optimized_params = minimize(objective_function, initial_params, args=(df.index, known_rates), constraints=constraints).x
+
+        return optimized_params
+        # interpolation_time = [2.5, 3.5, 4.5]
+
+    # Use your interpolation function to get interpolated yields
+    interpolated_yields = model_vasicek(df.index, df['taux'])
+
+    # Plotting the original and interpolated yield curve
+    plt.plot(df.index, df['taux'], 'o-', label='Original Yield Curve')
+    plt.plot(interpolation_time, interpolated_yields, 's--', label='Interpolated Yields')
+    plt.xlabel('Maturity')
+    plt.ylabel('Yield')
+    plt.legend()
+    plt.title('Yield Curve with Linear Interpolation')
+    st.pyplot()
+    # plt.show()
 
 
 
+# ---------------------------------- ikhan d linear---------------------
+elif modele == "Linear" :
+   
+    def interpolate_linear(known_time, known_rates, interpolation_time):
+        f = interp1d(known_time, known_rates, kind='linear', fill_value='extrapolate')
+        curves_yield = f(interpolation_time)
+        return curves_yield
+
+    interpolation_time = [2.5, 3.5, 4.5]
+
+    # Use your interpolation function to get interpolated yields
+    interpolated_yields = interpolate_linear(df.index, df['taux'], interpolation_time)
+
+    # Plotting the original and interpolated yield curve
+    plt.plot(df.index, df['taux'], 'o-', label='Original Yield Curve')
+    #plt.plot(interpolation_time, interpolated_yields, 's--', label='Interpolated Yields')
+    plt.xlabel('Maturity')
+    plt.ylabel('Yield')
+    plt.legend()
+    plt.title('Yield Curve with Linear Interpolation')
+    st.pyplot()
+    # plt.show()
 
 
 
+elif modele == "polynomial" :
 
+    def interpolate_polynomial( known_time, known_rates, interpolation_time, degree=2):
+        coefficients = np.polyfit(known_time, known_rates, degree)
+        curves_yield = np.polyval(coefficients, interpolation_time)
+        return curves_yield
+    
 
+    interpolation_time = [2.5, 3.5, 4.5]
 
+    # Use your interpolation function to get interpolated yields
+    interpolated_yields = interpolate_polynomial(df.index, df['taux'], interpolation_time)
 
+    # Plotting the original and interpolated yield curve
+    plt.plot(df.index, df['taux'], 'o-', label='Original Yield Curve')
+    #plt.plot(interpolation_time, interpolated_yields, 's--', label='Interpolated Yields')
+    plt.xlabel('Maturity')
+    plt.ylabel('Yield')
+    plt.legend()
+    plt.title('Yield Curve with polynomial Interpolation')
+    st.pyplot()
+    # plt.show()
