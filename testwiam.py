@@ -1,104 +1,289 @@
+import streamlit as st
+from scipy import interpolate
+import matplotlib.pyplot as plt
 import numpy as np
-from scipy.interpolate import interp1d, CubicSpline
-from scipy.optimize import minimize, curve_fit
-from data_fetch import DataFetcher
 import pandas as pd
+from scipy.optimize import minimize
 
-class InterestRateModel:
-    def _init_(self, selected_rate, start_date, end_date):
-        self.data_fetcher = DataFetcher()
-        self.data = self.data_fetcher.get_interest_rate_data(selected_rate, start_date, end_date)
-        self.known_time = self.data.index
-        self.known_rates = self.data['Close']
-        self.interpolation_time = pd.date_range(start=start_date, end=end_date, freq='D')
+file_path ='C:/Users/AHMED/Desktop/projet asri 2/output.xlsx'
 
-    def interpolate_or_model(self, model_type, known_time, known_rates, interpolation_time, params=None):
-        if model_type == 'Linear':
-            return self.interpolate_linear(known_time, known_rates, interpolation_time)
-        elif model_type == 'Polynomial':
-            return self.interpolate_polynomial(known_time, known_rates, interpolation_time, params=params)
-        elif model_type == 'Cubic':
-            return self.interpolate_cubic(known_time, known_rates, interpolation_time)
-        elif model_type == 'Exponential':
-            return self.interpolate_exponential(known_time, known_rates, interpolation_time)
-        elif model_type == 'Spline Linear':
-            return self.spline_linear(known_time, known_rates, interpolation_time)
-        elif model_type == 'Spline Cubic':
-            return self.spline_cubic(known_time, known_rates, interpolation_time)
-        elif model_type == 'Nelson-Siegel':
-            return self.model_nelson_siegel(known_time, known_rates, params=params)
-        elif model_type == 'Vasicek':
-            return self.model_vasicek(known_time, known_rates, params=params)
-        else:
-            raise ValueError("Invalid model type.")
+# Read the Excel file into a DataFrame
+df = pd.read_excel(file_path)
 
-    # def interpolate_linear(self, known_time, known_rates, interpolation_time):
-    #     f = interp1d(known_time, known_rates, kind='linear', fill_value='extrapolate')
-    #     curves_yield = f(interpolation_time)
-    #     return curves_yield
+# Extract 'maturities' and 'yields' columns as lists
+maturities = df['maturities'].tolist()
+yields = df['yields'].tolist()
 
-    # def interpolate_polynomial(self, known_time, known_rates, interpolation_time, degree=2):
-    #     coefficients = np.polyfit(known_time, known_rates, degree)
-    #     curves_yield = np.polyval(coefficients, interpolation_time)
-    #     return curves_yield
+# Print the lists (optional)
+print("Maturities:", maturities)
+print("Yields:", yields)
 
-    def interpolate_cubic(self, known_time, known_rates, interpolation_time):
-        f = interp1d(known_time, known_rates, kind='cubic', fill_value='extrapolate')
-        curves_yield = f(interpolation_time)
-        return curves_yield
 
-    def interpolate_exponential(self, known_time, known_rates, interpolation_time):
-        p = np.polyfit(known_time, np.log(known_rates), 1)
-        curves_yield = np.exp(np.polyval(p, interpolation_time))
-        return curves_yield
+
+def linear_interpolation(maturities, yields, desired_maturity):
+    f = interpolate.interp1d(maturities, yields, kind='linear')
+    return f(desired_maturity)
+
+def cubic_interpolation(maturities, yields, desired_maturity):
+    f = interpolate.interp1d(maturities, yields, kind='cubic')
+    return f(desired_maturity)
+
+def plot_linear_curve(maturities, yields, desired_maturity):
+    plt.figure(figsize=(8, 6))
     
-    def spline_linear(self, known_time, known_rates, interpolation_time):
-        f = interp1d(known_time, known_rates, kind='linear', fill_value='extrapolate')
-        curves_yield = f(interpolation_time)
-        return curves_yield
+    # Plotting the original yield curve data
+    plt.plot(maturities, yields, 'o', label='Original Data Points')
 
-    def spline_cubic(self, known_time, known_rates, interpolation_time):
-        f = CubicSpline(known_time, known_rates)
-        curves_yield = f(interpolation_time)
-        return curves_yield
+    # Generating more points for smoother curve using linspace for plotting
+    maturities_smooth = np.linspace(min(maturities), max(maturities), 1000)
+    yield_linear = linear_interpolation(maturities, yields, desired_maturity)
+    
+    # Plotting the linear interpolated curve
+    plt.plot(maturities_smooth, linear_interpolation(maturities, yields, maturities_smooth), label='Linear Interpolation', linestyle='--')
 
-    def model_nelson_siegel(self, known_time, known_rates, params=None):
-        if params is None:
-            params = self.fit_nelson_siegel_parameters(known_time, known_rates)
-        ytm = params[0] + params[1] * (1 - np.exp(-known_time / params[2])) / (known_time / params[2]) + params[1] * np.exp(-known_time / params[2])
-        return ytm
+    # Plotting the cubic interpolated curve
 
-    def model_vasicek(self, known_time, known_rates, params=None):
-        if params is None:
-            params = self.fit_vasicek_parameters(known_time, known_rates)
-        random_noise = np.random.normal(0, 1, len(known_time))
-        ytm = params[0] + params[1] * (params[0] - known_time) * (1 - np.exp(-params[2] * known_time)) / params[2] + params[2] / params[1] * (
-                    (1 - np.exp(-params[2] * known_time)) * random_noise - known_time * (1 - np.exp(-params[2] * known_time)))
-        return ytm
+    # Plotting the interpolated points
+    plt.plot(desired_maturity, yield_linear, 'rx', markersize=10, label=f'Interpolated Point (Linear): {yield_linear:.2f}%')
 
-    def fit_vasicek_parameters(self, known_time, known_rates):
-        # Objective function to minimize (sum of squared errors)
-        def objective_function(params, known_time, known_rates):
-            return np.sum((known_rates - self.model_vasicek(known_time, *params))**2)
+    # Adding labels and title
+    plt.xlabel('Maturity (Years)')
+    plt.ylabel('Yield (%)')
+    plt.title('Yield Curve Interpolation')
 
-        # Initial guess for parameters and constraints
-        initial_params = [0.01, 0.01, 0.01]
-        constraints = ({'type': 'positive', 'fun': lambda x: x[2]})
+    # Show legend
+    plt.legend()
+
+
+    
+    
+    
+    
+def plot_cubic_curve(maturities, yields, desired_maturity):
+    plt.figure(figsize=(8, 6))
+    
+    # Plotting the original yield curve data
+    plt.plot(maturities, yields, 'o', label='Original Data Points')
+
+    # Generating more points for smoother curve using linspace for plotting
+    maturities_smooth = np.linspace(min(maturities), max(maturities), 1000)
+    yield_cubic = cubic_interpolation(maturities, yields, desired_maturity)
+    
+    # Plotting the linear interpolated curve
+
+    # Plotting the cubic interpolated curve
+    plt.plot(maturities_smooth, cubic_interpolation(maturities, yields, maturities_smooth), label='Cubic Interpolation', linestyle='--')
+
+    # Plotting the interpolated points
+    plt.plot(desired_maturity, yield_cubic, 'bx', markersize=10, label=f'Interpolated Point (Cubic): {yield_cubic:.2f}%')
+
+    # Adding labels and title
+    plt.xlabel('Maturity (Years)')
+    plt.ylabel('Yield (%)')
+    plt.title('Yield Curve Interpolation')
+    
+    # Show legend
+    plt.legend()
+
+
+
+
+
+
+# Nelson-Siegel model function
+def nelson_siegel(t, beta0, beta1, beta2, tau):
+    return beta0 + beta1 * (1 - np.exp(-t / tau)) + beta2 * ((t / tau) * (1 - np.exp(-t / tau)))
+
+# Objective function to minimize the sum of squared errors
+def objective_function_ns(params, *args):
+    t, y = args
+    return np.sum((y - nelson_siegel(t, *params)) ** 2)
+
+
+def plot_ns_curve(maturities,yields):
+
+    # Sample data (maturities and corresponding yields)
+    maturities = np.array(maturities)  # Maturities in years
+    yields = np.array(yields)  # Corresponding yields
+
+    # Initial guess for the parameters
+    initial_params = [2.0, -1.0, -1.0, 1.0]  # beta0, beta1, beta2, tau
+
+    # Fitting the model
+    result = minimize(objective_function_ns, initial_params, args=(maturities, yields))
+    if result.success:
+        fitted_params = result.x
+        st.write("Fitted parameters:  \n beta0 = ", fitted_params[0],  "  \nbeta1 = ", fitted_params[1], "  \nbeta2 = ", fitted_params[2], "  \ntau = ",fitted_params[3])
+    else:
+        st.write("Optimization did not converge.")
+
+    # Using the fitted parameters to plot the curve
+    curve_maturities = np.linspace(0, 30, 100)  # Generate finer maturities for smoother curve
+    fitted_curve = nelson_siegel(curve_maturities, *fitted_params)
+
+    plt.figure(figsize=(8, 6))
+    plt.plot(curve_maturities, fitted_curve, label='Fitted Curve')
+    plt.scatter(maturities, yields, color='red', label='Original Data')
+    plt.xlabel('Maturity (Years)')
+    plt.ylabel('Yield')
+    plt.legend()
+    plt.title('Nelson-Siegel Fitted Curve')
+    plt.grid(True)
+
+
+
+
+# Nelson-Siegel-Svensson model function
+def nelson_siegel_svensson(t, beta0, beta1, beta2, beta3, tau1, tau2):
+    return beta0 + beta1 * (1 - np.exp(-t / tau1)) + beta2 * ((t / tau1) * (1 - np.exp(-t / tau1))) + beta3 * (((1-np.exp(-t / tau2))/(t / tau2))-np.exp(-t / tau2))
+
+# Objective function to minimize the sum of squared errors
+def objective_function_nss(params, *args):
+    t, y = args
+    return np.sum((y - nelson_siegel_svensson(t, *params)) ** 2)
+
+def plot_nss_curve(maturities,yields):
+    maturities = [1/12,2/12,3/12,4/12,6/12,1,2,3,5,7,10,20,30]  # in years
+    # Sample data (maturities and corresponding yields)
+    maturities = np.array(maturities)  # Maturities in years
+    yields = np.array(yields)  # Corresponding yields
+
+    # Initial guess for the parameters
+    initial_params = [2.0, -1.0, -1.0, 1.0, 1.0, 1.0]  # beta0, beta1, beta2, beta3, tau1, tau2
+
+    # Fitting the model
+    result = minimize(objective_function_nss, initial_params, args=(maturities, yields))
+    if result.success:
+        fitted_params = result.x
+        st.write("Fitted parameters:  \n beta0 = ", fitted_params[0],  "  \nbeta1 = ", fitted_params[1], "  \nbeta2 = ", fitted_params[2], "  \nbeta3 = ",fitted_params[3],"  \ntau1 = ",fitted_params[4],"  \ntau2 = ",fitted_params[5] )
+    else:
+        st.write("Optimization did not converge.")
+
+    # Using the fitted parameters to plot the curve
+
+    curve_maturities = np.linspace(0, 30, 100)  # Generate finer maturities for smoother curve
+    fitted_curve = nelson_siegel_svensson(curve_maturities, *fitted_params)
+
+    plt.figure(figsize=(8, 6))
+    plt.plot(curve_maturities, fitted_curve, label='Fitted Curve')
+    plt.scatter(maturities, yields, color='red', label='Original Data')
+    plt.xlabel('Maturity (Years)')
+    plt.ylabel('Yield')
+    plt.legend()
+    plt.title('Nelson-Siegel Svensson Fitted Curve')
+    plt.grid(True)
+
+
+
+
+
+
+def plot_vasicek():
+    class Rate():
+        def _init_(self, N=1000, dt=0.05, sigma=0.001, alpha=10, beta=0.04, r0=0.04):
+            """
+            Parameters
+            ----------
+            N : Number of steps
+            dt : Time steps
+            sigma : Scale
+            alpha : Speed of adjustment
+            beta : Long-term equilibrium
+            r0: Current interest rate
+            """
+            self.N = N
+            self.dt = dt
+            self.sigma = sigma
+            self.alpha = alpha
+            self.beta = beta
+            self.r0 = r0
+
+        def wiener(self):
+            """
+            Wiener process
+            Returns
+            -------
+            Array of realisations of Wiener process
+            """
+            #Result vector
+            out = np.zeros(self.N)
+
+            #Initial value
+            out[0] = np.sqrt(self.dt) * self.sigma * np.random.normal(0, 1)
+
+            for j in range(1, self.N):
+                out[j] = out[j - 1] + np.sqrt(self.dt) * self.sigma * np.random.normal(0, 1)
+                
+            return out
+
         
-        # Minimize the objective function using scipy.optimize.minimize
-        optimized_params = minimize(objective_function, initial_params, args=(known_time, known_rates), constraints=constraints).x
+        def vasicek(self):
+            """
+            Returns
+            -------
+            Array of simulated interest rates 
+            """        
+            #Result vector
+            out = np.zeros(self.N)
+            
+            #Initial value
+            out[0] = self.r0
+            
+            #Wiener process
+            w = Rate()
+            w = w.wiener()
 
-        return optimized_params
+            for j in range(1, self.N):
+                out[j] = out[j - 1] + self.alpha*(self.beta - out[j - 1])*self.dt + w[j]
+                
+            return out
+    oo = Rate()
+    vs = oo.vasicek()
+    plt.plot(vs)
 
-    def fit_nelson_siegel_parameters(self, known_time, known_rates):
-        # Objective function to minimize (sum of squared errors)
-        def objective_function(params, known_time, known_rates):
-            return np.sum((known_rates - self.model_nelson_siegel(known_time, *params))**2)
+    
 
-        # Initial guess for parameters
-        initial_params = [0.01, 0.01, 1.0]
-        
-        # Minimize the objective function using scipy.optimize.curve_fit
-        optimized_params, _ = curve_fit(objective_function, known_time, known_rates, p0=initial_params)
 
-        return optimized_params
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+st.title("Yield curve")
+
+# Choix de la méthode : 
+modele = st.radio("Choisir une méthode", ("Linear", "Cubic", "Nelson Siegel", "Nelson Siegel Svensson", "Vasicek"))
+
+if modele == "Linear":
+    desired_maturity  = st.number_input("desired maturity", value=6)
+    plot_linear_curve(maturities, yields, desired_maturity)
+elif modele == "Cubic":
+    desired_maturity  = st.number_input("desired maturity", value=6)
+    plot_cubic_curve(maturities, yields, desired_maturity)
+elif modele == "Nelson Siegel":
+    def nelson_siegel_formula():
+        return r"$R(\tau) = \beta_0 + \beta_1 \cdot \frac{1 - e^{-\lambda \cdot \tau}}{\lambda \cdot \tau} + \beta_2 \cdot \left(\frac{1 - e^{-\lambda \cdot \tau}}{\lambda \cdot \tau} - e^{-\lambda \cdot \tau}\right)$"
+    st.title("Méthode de Nelson-Siegel")
+    st.write(nelson_siegel_formula())
+    plot_ns_curve(maturities,yields)
+elif modele == "Nelson Siegel Svensson":
+    def nelson_siegel_svensson_formula():
+        return r"$r(\tau) = \beta_0 + \beta_1 \left(\frac{1 - e^{-\lambda \tau}}{\lambda \tau}\right) + \beta_2 \left(\frac{1 - e^{-\lambda \tau}}{\lambda \tau} - e^{-\lambda \tau}\right) + \beta_3 \left(\frac{1 - e^{-\lambda_2 \tau}}{\lambda_2 \tau} - e^{-\lambda_2 \tau}\right)$"
+    st.title("Méthode de Nelson-Siegel")
+    st.write(nelson_siegel_svensson_formula())
+    plot_nss_curve(maturities,yields)
+elif modele == "Vasicek":
+    plot_vasicek()
+
+st.pyplot()
+
+st.set_option('deprecation.showPyplotGlobalUse', False)

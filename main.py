@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d, CubicSpline
 from scipy.optimize import least_squares
 import statsmodels.api as sm
-
+from scipy.optimize import minimize
 
 
 st.title('Modélisation de la courbe du taux:')
@@ -16,7 +16,7 @@ st.title('Modélisation de la courbe du taux:')
 # st.subheader('Entrez les parametres de votre portefeuille: :key: ')
 with st.form(key="my_form"):
     country = st.text_input("Choisir le pays")
-    modele = st.selectbox("Le modele", ["spline cubic", "Nelson Siegel", "Vasicek ", "Linear", "polynomial"])
+    modele = st.selectbox("Le modele", ["spline cubic", "Nelson Siegel", "vasiccek ", "Linear"])
     st.form_submit_button("Modeliser")
 
 
@@ -103,8 +103,79 @@ if modele == "spline cubic" :
 
 
 # ---------------------------------- ikhan d CIR---------------------
-elif modele == "CIR":
-    st.write('not yet')
+# elif modele == "CIR":
+#     st.write('not yet')
+
+#     def ajuster_modele_cir(beta, temps, taux):
+#         r0, a, b, sigma = beta
+#         erreur = cir_residu(beta, temps, taux)
+#         return erreur
+#     def cir_residu(beta, temps, taux):
+#         r0, a, b, sigma = beta
+#         dt = np.diff(temps)
+#         dr = np.diff(taux)
+#         esp_dt = np.exp(-a * temps[:-1] * dt)
+#         erreur = (r0 - a * b) * (1 - esp_dt) - a * np.cumsum((dr - sigma * np.sqrt(esp_dt) * np.random.normal(size=len(dr))) / esp_dt)
+#         return erreur
+
+    # Fonction pour interpoler linéairement entre les points de données
+    # def interpoler_lineaire(temps_connus, taux_connus, temps_interpolation):
+    #     f = interp1d(temps_connus, taux_connus, kind='linear', fill_value='extrapolate')
+    #     taux_interpolated = f(temps_interpolation)
+    #     return taux_interpolated
+    
+    # Modèle CIR
+    # r0_guess = df['taux'].iloc[0]
+    # a_guess = 0.1
+    # b_guess = df['taux'].mean()
+    # sigma_guess = df['taux'].std()
+
+    # # Initialisation des paramètres
+    # beta_initial = [r0_guess, a_guess, b_guess, sigma_guess]
+    # bounds = ([0, 0, 0, 0], [np.inf, np.inf, np.inf, np.inf])
+    # # Ajustement des paramètres du modèle CIR aux données
+    # # res_cir = least_squares(ajuster_modele_cir, beta_initial, args=(df.index, df['taux']))
+    # res_cir = least_squares(ajuster_modele_cir, beta_initial, args=(df.index, df['taux']), bounds=bounds)
+
+    # # Paramètres ajustés
+    # r0_adj, a_adj, b_adj, sigma_adj = res_cir.x
+
+    # # Temps pour l'interpolation
+    # temps_interpolation = np.linspace(df.index.min(), df.index.max(), 1000)
+
+    # # Interpolation linéaire des taux connus
+    # taux_interpolated_linear = interpoler_lineaire(df.index, df['taux'], temps_interpolation)
+
+    # # Modélisation CIR des taux
+    # taux_cir_modele = np.zeros_like(temps_interpolation)
+    # taux_cir_modele[0] = r0_adj
+
+    # for i in range(1, len(temps_interpolation)):
+    #     dt_cir = temps_interpolation[i] - temps_interpolation[i - 1]
+    #     esp_dt_cir = np.exp(-a_adj * temps_interpolation[i - 1] * dt_cir)
+    #     taux_cir_modele[i] = r0_adj + a_adj * (b_adj - taux_cir_modele[i - 1]) * (1 - esp_dt_cir) + \
+    #                         sigma_adj * np.sqrt(esp_dt_cir) * np.random.normal()
+
+    # # Affichage avec Streamlit
+    # # st.write('Données de la courbe des taux:')
+    # # st.dataframe(df)
+
+    # # st.write('Paramètres ajustés du modèle CIR:')
+    # # st.write('r0 = ', r0_adj)
+    # # st.write('a = ', a_adj)
+    # # st.write('b = ', b_adj)
+    # # st.write('sigma = ', sigma_adj)
+
+    # st.write('Modélisation de la courbe des taux avec CIR:')
+    # plt.plot(df.index, df['taux'], 'o', label='Données observées')
+    # # plt.plot(temps_interpolation, taux_interpolated_linear, '--', label='Interpolation linéaire')
+    # plt.plot(temps_interpolation, taux_cir_modele, label='Modèle CIR')
+    # plt.title('Modélisation de la courbe des taux avec CIR')
+    # plt.xlabel('Maturité (mois)')
+    # plt.ylabel('Taux')
+    # plt.legend()
+    # st.pyplot()
+
 
 # ---------------------------------- ikhan d nelson---------------------
 elif modele == "Nelson Siegel" :
@@ -197,48 +268,98 @@ elif modele == "Nelson Siegel" :
     plt.legend()
     st.pyplot()
 
+elif modele == "vasiccek " :
 
-# ---------------------------------- ikhan d Vasicek---------------------
-elif modele == "Vasicek":
-
-    def model_vasicek(known_time, known_rates, params=None):
-        if params is None:
-            params = fit_vasicek_parameters(known_time, known_rates)
-        random_noise = np.random.normal(0, 1, len(known_time))
-        ytm = params[0] + params[1] * (params[0] - known_time) * (1 - np.exp(-params[2] * known_time)) / params[2] + params[2] / params[1] * (
-                    (1 - np.exp(-params[2] * known_time)) * random_noise - known_time * (1 - np.exp(-params[2] * known_time)))
-        return ytm
-
-        def fit_vasicek_parameters(self, known_time, known_rates):
-        # Objective function to minimize (sum of squared errors)
-            def objective_function(params, known_time, known_rates):
-                return np.sum((known_rates - self.model_vasicek(known_time, *params))**2)
-
-        # Initial guess for parameters and constraints
-        initial_params = [0.01, 0.01, 0.01]
-        constraints = ({'type': 'positive', 'fun': lambda x: x[2]})
+    # r0=0.03
+    # k=0.1
+    # theta=0.05
+    # sigma=0.01
+    # T=10
+    r0 = df['taux'].iloc[0]  # Taux d'intérêt initial (première ligne du DataFrame)
+    k = 0.1  # Paramètre k du modèle Vasicek (à ajuster)
+    theta = df['taux'].mean()  # Moyenne à long terme (moyenne des taux du DataFrame)
+    sigma = df['taux'].std()  # Volatilité (écart type des taux du DataFrame)
+    T = df.index.max()  # Échéance maximale
+    num_points = len(df.index) + 1
+    # num_points= 100
+    dt = T / num_points
+    time_points = np.linspace(0, T, num_points + 1)
         
-        # Minimize the objective function using scipy.optimize.minimize
-        optimized_params = minimize(objective_function, initial_params, args=(df.index, known_rates), constraints=constraints).x
+        # Calcul de la structure par terme des taux avec le modèle de Vasicek
+    rates = theta + (r0 - theta) * np.exp(-k * time_points) + sigma * np.sqrt(dt) * np.random.normal(size=num_points + 1).cumsum()
 
-        return optimized_params
-        # interpolation_time = [2.5, 3.5, 4.5]
+    #------------------------------- Tracé de la courbe
+# ... (votre code précédent)
 
-    # Use your interpolation function to get interpolated yields
-    interpolated_yields = model_vasicek(df.index, df['taux'])
+# Affichage des paramètres dans un tableau
+    parametres_table = pd.DataFrame({
+        'Paramètre': ['r0', 'k', 'theta', 'sigma', 'T', 'dt', 'time_points'],
+        'Valeur': [r0, k, theta, sigma, T, dt, str(time_points)]
+    })
 
-    # Plotting the original and interpolated yield curve
-    plt.plot(df.index, df['taux'], 'o-', label='Original Yield Curve')
-    plt.plot(interpolation_time, interpolated_yields, 's--', label='Interpolated Yields')
-    plt.xlabel('Maturity')
-    plt.ylabel('Yield')
+    st.table(parametres_table)
+
+    
+    plt.plot(time_points, rates, label='Structure par terme des taux (Vasicek)')
+    plt.title('Structure par terme des taux avec le modèle de Vasicek')
+    plt.xlabel('Temps')
+    plt.ylabel('Taux d\'intérêt')
     plt.legend()
-    plt.title('Yield Curve with Linear Interpolation')
-    st.pyplot()
-    # plt.show()
+    plt.grid(True)
+    figg = plt.show()
+    st.pyplot(figg)
+        # Paramètres du modèle
 
 
+    r0 = df['taux'].iloc[0]  # Taux d'intérêt initial (première ligne du DataFrame)
+    a = 0.1  # Paramètre k du modèle Vasicek (à ajuster)
+    
+    b = df['taux'].mean()  # Moyenne à long terme (moyenne des taux du DataFrame)
+    sigma = df['taux'].std()  # Volatilité (écart type des taux du DataFrame)
+    T = df.index.max()  # Échéance maximale
 
+    # Fonctions d'espérance et de variance
+    def esperance(t):
+        return r0 * np.exp(-a * t) + b * (1 - np.exp(-a * t))
+
+    def variance(t):
+        return (sigma**2) / (2 * a) * (1 - np.exp(-2 * a * t))
+
+    # Création des données pour la visualisation
+    temps = np.linspace(0, 10, 1000)  # vous pouvez ajuster la plage de temps
+    esperance_resultats = esperance(temps)
+    variance_resultats = variance(temps)
+
+    col1 , col2 = st.columns(2)
+    with col1:        
+
+        # Tracer l'espérance
+        plt.figure(figsize=(10, 5))
+        plt.subplot(1, 2, 1)
+        plt.plot(temps, esperance_resultats, label='Espérance')
+        plt.title('Espérance de r(t) en fonction du temps')
+        plt.xlabel('Temps')
+        plt.ylabel('Espérance')
+        plt.legend()
+        st.pyplot()
+
+        st.write('La limite de la moyenne à long terme est : ', b)
+    with col2:
+        # Tracer la variance
+        plt.subplot(1, 2, 2)
+        plt.plot(temps, variance_resultats, label='Variance')
+        plt.title('Variance de r(t) en fonction du temps')
+        plt.xlabel('Temps')
+        plt.ylabel('Variance')
+        plt.legend()
+        st.pyplot()
+
+        st.write('La limite de la variance à long terme est : ', (sigma**2) / (2 * a))
+
+        plt.tight_layout()
+        plt.show()
+
+    
 # ---------------------------------- ikhan d linear---------------------
 elif modele == "Linear" :
    
