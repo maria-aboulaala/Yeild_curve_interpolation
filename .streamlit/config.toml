@@ -1,4 +1,7 @@
 [deprecation]
 showPyplotGlobalUse = false
 
-
+[theme]
+base="dark"
+primaryColor="#4b97ff"
+backgroundColor="#010c23"
